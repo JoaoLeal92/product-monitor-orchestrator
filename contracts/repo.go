@@ -22,3 +22,8 @@ type ProductsRepository interface {
 type CrawlersRepository interface {
 	GetCrawlerName(crawlerID uuid.UUID) (string, error)
 }
+
+type ProductSearchHistoryRepository interface {
+	InsertNewHistory(productSearch *entities.ProductSearchHistory) error
+	GetHistoryByProductID(productID uuid.UUID) ([]entities.ProductSearchHistory, error)
+}

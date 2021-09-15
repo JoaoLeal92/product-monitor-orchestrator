@@ -46,3 +46,7 @@ func (c *Connection) Products() contracts.ProductsRepository {
 func (c *Connection) Crawlers() contracts.CrawlersRepository {
 	return NewCrawlerRepository(c.Db)
 }
+
+func (c *Connection) ProductSearchHistory() contracts.ProductSearchHistoryRepository {
+	return NewProductSearchHistoryRepository(c.Db)
+}
