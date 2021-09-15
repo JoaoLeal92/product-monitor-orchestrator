@@ -18,3 +18,29 @@ type Product struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+type CrawlerResult struct {
+	Price         string `mapstructure:"price"`
+	OriginalPrice string `mapstructure:"originalPrice"`
+	Discount      string `mapstructure:"discount"`
+	Link          string `mapstructure:"link"`
+}
+
+type ProductSearchHistory struct {
+	ID            uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	UserID        uuid.UUID
+	ProductID     uuid.UUID
+	Price         int
+	OriginalPrice int
+	Discount      string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type Tabler interface {
+	TableName() string
+}
+
+func (ProductSearchHistory) TableName() string {
+	return "product_search_history"
+}
