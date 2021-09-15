@@ -3,23 +3,19 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"github.com/dlclark/regexp2"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/JoaoLeal92/product-monitor-orchestrator/config"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/data"
+	"github.com/JoaoLeal92/product-monitor-orchestrator/entities"
 )
-
-type Product struct {
-	Price         string `mapstructure:"price"`
-	OriginalPrice string `mapstructure:"originalPrice"`
-	Discount      string `mapstructure:"discount"`
-	Link          string `mapstructure:"link"`
-}
 
 func main() {
 
@@ -86,58 +82,64 @@ func main() {
 			cmd.Run()
 			fmt.Println("output: ", outb.String())
 
-			product, err := parseCrawlerOutput(regexMap, outb.String())
+			crawlerResult, err := parseCrawlerOutput(regexMap, outb.String())
 			if err != nil {
 				panic(err)
 			}
 
-			fmt.Printf("%+v\n", product)
+			var priceInt int
+			var originalPriceInt int
+			if crawlerResult.Price != "" {
+				priceInt, err = strconv.Atoi(crawlerResult.Price)
+				if err != nil {
+					panic(err)
+				}
+			}
+
+			if crawlerResult.OriginalPrice != "" {
+				originalPriceInt, err = strconv.Atoi(crawlerResult.OriginalPrice)
+				if err != nil {
+					panic(err)
+				}
+			}
+
+			productSearchResult := entities.ProductSearchHistory{
+				UserID:        user.ID,
+				ProductID:     product.ID,
+				Price:         priceInt,
+				OriginalPrice: originalPriceInt,
+				Discount:      crawlerResult.Discount,
+			}
+
+			db.ProductSearchHistory().InsertNewHistory(&productSearchResult)
+
+			// Validade output
+			if productSearchResult.Price <= product.MaxPrice {
+				// Calculate average price over the search period
+				productHistory, err := db.ProductSearchHistory().GetHistoryByProductID(product.ID)
+				if err != nil {
+					panic(err)
+				}
+
+				avgProductPrice := getProductAvgPrice(productHistory)
+				avgProductDiscount := getAvgDiscount(avgProductPrice, productSearchResult.Price)
+
+				// Informs the user (insert telegram bot logic here)
+				fmt.Println("Current price: ", productSearchResult.Price)
+				fmt.Println("Average search price: ", avgProductPrice)
+				fmt.Println("Announced discount: ", productSearchResult.Discount)
+				fmt.Println("Discount over average search price: ", avgProductDiscount)
+			}
+
+			fmt.Printf("%+v\n", crawlerResult)
 		}
 	}
 
 	fmt.Println("Fim")
-
-	// crawlerPath, err := filepath.Abs("../crawlers/amazon")
-	// fmt.Println(crawlerPath)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// pipfile, err := filepath.Abs("../crawlers/amazon/Pipfile")
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// regexMap := map[string]string{
-	// 	"price":         `(?<=price=).*(?=,\s?original_price)`,
-	// 	"originalPrice": `(?<=original_price=).*(?=,\s?discount)`,
-	// 	"discount":      `(?<=discount=).*(?=,\s?link)`,
-	// 	"link":          `(?<=link=').*(?='\))`,
-	// }
-
-	// url := "https://www.amazon.com.br/dp/B07N6RMSY3/?coliid=I3IBUR6XCSG0M6&colid=2BQG6XN6AZAHT&psc=1&ref_=lv_ov_lig_dp_it"
-	// url := "https://www.amazon.com.br/Adaptador-3x1-Tipo-c-Thunderbolt-Hdmi/dp/B077NGXPSV/?_encoding=UTF8&pd_rd_w=7friT&pf_rd_p=e824797f-48a0-405f-a37a-4e512542e9e8&pf_rd_r=Y80SFM425X6TYA9224FJ&pd_rd_r=2ec40c6d-e2f4-4c70-987b-3d7332c450d9&pd_rd_wg=ZDLF9&ref_=pd_gw_ci_mcx_mr_hp_atf_m"
-
-	// os.Setenv("PIPENV_PIPFILE", pipfile)
-	// cmd := exec.Command("pipenv", "run", "python", crawlerPath, fmt.Sprintf("-u %s", url))
-
-	// var outb, errb bytes.Buffer
-	// cmd.Stdout = &outb
-	// cmd.Stderr = &errb
-
-	// cmd.Run()
-	// fmt.Println("output: ", outb.String())
-
-	// product, err := parseCrawlerOutput(regexMap, outb.String())
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// fmt.Printf("%+v\n", product)
 }
 
-func parseCrawlerOutput(reMap map[string]string, out string) (*Product, error) {
-	product := Product{}
+func parseCrawlerOutput(reMap map[string]string, out string) (*entities.CrawlerResult, error) {
+	crawlerResult := entities.CrawlerResult{}
 	parsedData := make(map[string]interface{})
 
 	for k, v := range reMap {
@@ -154,10 +156,33 @@ func parseCrawlerOutput(reMap map[string]string, out string) (*Product, error) {
 		}
 	}
 
-	err := mapstructure.Decode(parsedData, &product)
+	err := mapstructure.Decode(parsedData, &crawlerResult)
 	if err != nil {
-		return &Product{}, err
+		return &entities.CrawlerResult{}, err
 	}
 
-	return &product, nil
+	return &crawlerResult, nil
+}
+
+func getProductAvgPrice(productHistory []entities.ProductSearchHistory) float64 {
+	var sum float64 = 0
+	for _, product := range productHistory {
+		sum += float64(product.Price) / 100
+	}
+
+	avg := sum / float64(len(productHistory))
+	roundAvg := math.Round(avg*100) / 100
+
+	return roundAvg
+}
+
+func getAvgDiscount(avgPrice float64, currentPrice int) string {
+	currentPriceFloat := float64(currentPrice) / 100
+
+	priceDiff := avgPrice - currentPriceFloat
+	discount := priceDiff / avgPrice
+
+	discountString := fmt.Sprintf("%.2f", discount)
+
+	return discountString
 }
