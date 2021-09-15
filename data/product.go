@@ -21,7 +21,7 @@ func NewProductsRepository(conn *gorm.DB) *ProductRepo {
 func (r *ProductRepo) GetActiveProductsByUser(userID uuid.UUID) ([]entities.Product, error) {
 	var products []entities.Product
 
-	result := r.db.Where("user_id = ?", userID).Find(&products)
+	result := r.db.Where("user_id = ? AND active = true", userID).Find(&products)
 	if result.Error != nil {
 		return []entities.Product{}, result.Error
 	}
