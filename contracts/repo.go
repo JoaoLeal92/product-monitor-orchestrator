@@ -17,6 +17,7 @@ type UsersRepository interface {
 
 type ProductsRepository interface {
 	GetActiveProductsByUser(userID uuid.UUID) ([]entities.Product, error)
+	GetProductByID(productId uuid.UUID) (entities.Product, error)
 }
 
 type CrawlersRepository interface {
@@ -24,6 +25,6 @@ type CrawlersRepository interface {
 }
 
 type ProductSearchHistoryRepository interface {
-	InsertNewHistory(productSearch *entities.ProductSearchHistory) error
-	GetHistoryByProductID(productID uuid.UUID) ([]entities.ProductSearchHistory, error)
+	InsertNewHistory(productSearch *entities.ProductSearchResult) error
+	GetHistoryByProductID(productID uuid.UUID) ([]entities.ProductSearchResult, error)
 }

@@ -20,7 +20,7 @@ func NewProductSearchHistoryRepository(conn *gorm.DB) *ProductSearchHisotry {
 	}
 }
 
-func (r *ProductSearchHisotry) InsertNewHistory(productSearch *entities.ProductSearchHistory) error {
+func (r *ProductSearchHisotry) InsertNewHistory(productSearch *entities.ProductSearchResult) error {
 	result := r.db.Create(&productSearch)
 
 	if result.Error != nil {
@@ -29,12 +29,12 @@ func (r *ProductSearchHisotry) InsertNewHistory(productSearch *entities.ProductS
 	return nil
 }
 
-func (r *ProductSearchHisotry) GetHistoryByProductID(productID uuid.UUID) ([]entities.ProductSearchHistory, error) {
-	var searchHistory []entities.ProductSearchHistory
+func (r *ProductSearchHisotry) GetHistoryByProductID(productID uuid.UUID) ([]entities.ProductSearchResult, error) {
+	var searchHistory []entities.ProductSearchResult
 
 	result := r.db.Where("product_id = ?", productID).Find(&searchHistory)
 	if result.Error != nil {
-		return []entities.ProductSearchHistory{}, result.Error
+		return []entities.ProductSearchResult{}, result.Error
 	}
 
 	return searchHistory, nil

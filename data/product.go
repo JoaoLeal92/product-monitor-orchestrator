@@ -28,3 +28,14 @@ func (r *ProductRepo) GetActiveProductsByUser(userID uuid.UUID) ([]entities.Prod
 
 	return products, nil
 }
+
+func (r *ProductRepo) GetProductByID(productId uuid.UUID) (entities.Product, error) {
+	var product entities.Product
+
+	result := r.db.First(&product, productId)
+	if result.Error != nil {
+		return entities.Product{}, result.Error
+	}
+
+	return product, nil
+}

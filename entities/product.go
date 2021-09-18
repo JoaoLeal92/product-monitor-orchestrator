@@ -26,7 +26,7 @@ type CrawlerResult struct {
 	Link          string `mapstructure:"link"`
 }
 
-type ProductSearchHistory struct {
+type ProductSearchResult struct {
 	ID            uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	UserID        uuid.UUID
 	ProductID     uuid.UUID
@@ -41,6 +41,6 @@ type Tabler interface {
 	TableName() string
 }
 
-func (ProductSearchHistory) TableName() string {
+func (ProductSearchResult) TableName() string {
 	return "product_search_history"
 }
