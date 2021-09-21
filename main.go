@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/JoaoLeal92/product-monitor-orchestrator/config"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/crawler"
@@ -26,11 +27,14 @@ func main() {
 	fmt.Printf("User products relations: %+v", userProductsRelations)
 
 	crawler := crawler.NewCrawler(parser, db)
+	startTime := time.Now()
 	crawlerResults, err := crawler.StartCrawler(userProductsRelations)
+	elapsedTime := time.Since(startTime)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println("Produtos processados com sucesso")
+	fmt.Printf("\n\nTempo de execução do crawler: %v\n\n", elapsedTime)
 
 	err = validator.ValidateCrawlerResults(crawlerResults)
 

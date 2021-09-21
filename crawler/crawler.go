@@ -13,6 +13,23 @@ import (
 	"github.com/google/uuid"
 )
 
+type ChanResult struct {
+	Result entities.ProductSearchResult
+	Err    error
+}
+
+type CrawlerRestultChan struct {
+	CrawlerResult string
+	CrawlerErr    string
+	ProductID     uuid.UUID
+}
+
+type ProductData struct {
+	crawlerPath string
+	productLink string
+	productID   uuid.UUID
+}
+
 type Crawler struct {
 	parser *ResultParser
 	db     *data.Connection
@@ -37,49 +54,71 @@ func (c *Crawler) StartCrawler(userProductsRelation map[string][]entities.Produc
 
 func (c *Crawler) processUsers(userProductsRelation map[string][]entities.ProductRelations) ([]entities.ProductSearchResult, error) {
 	var processingResults []entities.ProductSearchResult
+	var results = []chan ChanResult{}
 
+	chanIndex := 0
 	for userID, products := range userProductsRelation {
+		results = append(results, make(chan ChanResult))
 		fmt.Println("Processing user id: ", userID)
 
-		crawlerResults, err := c.processProducts(products, userID)
-		if err != nil {
-			return processingResults, err
-		}
+		go c.processProducts(products, userID, results[chanIndex])
 
-		processingResults = append(processingResults, crawlerResults...)
+		chanIndex++
+	}
+
+	for _, result := range results {
+		for v := range result {
+			if v.Err != nil {
+				return []entities.ProductSearchResult{}, v.Err
+			}
+			processingResults = append(processingResults, v.Result)
+		}
 	}
 
 	return processingResults, nil
 }
 
-func (c *Crawler) processProducts(productsRelations []entities.ProductRelations, userID string) ([]entities.ProductSearchResult, error) {
-	fmt.Println("Processando produtos")
-	var crawlerResults []entities.ProductSearchResult
+func (c *Crawler) processProducts(productsRelations []entities.ProductRelations, userID string, rchan chan ChanResult) {
+	defer close(rchan)
+	var crawlerResults = []chan CrawlerRestultChan{}
 
+	fmt.Println("Processando produtos")
+
+	chanIndex := 0
 	for _, productRelation := range productsRelations {
 		fmt.Println("Iniciando processamento do produto ", productRelation.Product.Description)
 
 		err := c.setupCrawlerEnv(productRelation.CrawlerPath)
 		if err != nil {
-			return crawlerResults, err
+			rchan <- ChanResult{Result: entities.ProductSearchResult{}, Err: err}
 		}
 
-		crawlerOutput, crawlerError := c.runCrawler(productRelation.CrawlerPath, productRelation.Product.Link)
-		if crawlerError != "" {
-			fmt.Println("Crawler error: ", crawlerError)
-		}
+		crawlerResults = append(crawlerResults, make(chan CrawlerRestultChan))
+		go c.runCrawler(
+			ProductData{
+				crawlerPath: productRelation.CrawlerPath,
+				productLink: productRelation.Product.Link,
+				productID:   productRelation.Product.ID,
+			},
+			crawlerResults[chanIndex],
+		)
 
-		crawlerResult := c.parser.parseCrawlerResult(crawlerOutput)
-
-		productSearchResult, err := c.createProductSearchHistory(crawlerResult, userID, productRelation.Product.ID)
-		if err != nil {
-			return crawlerResults, err
-		}
-
-		crawlerResults = append(crawlerResults, productSearchResult)
+		chanIndex++
 	}
 
-	return crawlerResults, nil
+	for _, channel := range crawlerResults {
+		for ch := range channel {
+
+			crawlerResult := c.parser.parseCrawlerResult(ch.CrawlerResult)
+
+			productSearchResult, err := c.createProductSearchHistory(crawlerResult, userID, ch.ProductID)
+			if err != nil {
+				rchan <- ChanResult{Result: entities.ProductSearchResult{}, Err: err}
+			}
+
+			rchan <- ChanResult{Result: productSearchResult, Err: nil}
+		}
+	}
 }
 
 func (c *Crawler) setupCrawlerEnv(crawlerPath string) error {
@@ -99,9 +138,11 @@ func (c *Crawler) setupCrawlerEnv(crawlerPath string) error {
 	return nil
 }
 
-func (c *Crawler) runCrawler(crawlerPath string, productLink string) (string, string) {
+func (c *Crawler) runCrawler(productData ProductData, crawlerChannel chan CrawlerRestultChan) {
+	defer close(crawlerChannel)
+
 	fmt.Println("Executando crawler")
-	cmd := exec.Command("pipenv", "run", "python", crawlerPath, fmt.Sprintf("-u %s", productLink))
+	cmd := exec.Command("pipenv", "run", "python", productData.crawlerPath, fmt.Sprintf("-u %s", productData.productLink))
 
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
@@ -109,13 +150,19 @@ func (c *Crawler) runCrawler(crawlerPath string, productLink string) (string, st
 
 	err := cmd.Run()
 	if err != nil {
-		return "", ""
+		crawlerChannel <- CrawlerRestultChan{}
 	}
 
 	fmt.Println("String de retorno do comando de execução: ", outb.String())
 	fmt.Println("String de erro do comando de execução: ", errb.String())
 
-	return outb.String(), errb.String()
+	crawlerResult := CrawlerRestultChan{
+		CrawlerResult: outb.String(),
+		CrawlerErr:    errb.String(),
+		ProductID:     productData.productID,
+	}
+
+	crawlerChannel <- crawlerResult
 }
 
 func (c *Crawler) createProductSearchHistory(crawlerResult *entities.CrawlerResult, userID string, productID uuid.UUID) (entities.ProductSearchResult, error) {
