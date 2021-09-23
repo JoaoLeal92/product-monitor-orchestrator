@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/JoaoLeal92/product-monitor-orchestrator/data"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/entities"
@@ -19,9 +20,10 @@ type ChanResult struct {
 }
 
 type CrawlerRestultChan struct {
-	CrawlerResult string
-	CrawlerErr    string
-	ProductID     uuid.UUID
+	CrawlerResult      string
+	CrawlerErr         string
+	ProductID          uuid.UUID
+	ProductDescription string
 }
 
 type ProductData struct {
@@ -79,46 +81,97 @@ func (c *Crawler) processUsers(userProductsRelation map[string][]entities.Produc
 }
 
 func (c *Crawler) processProducts(productsRelations []entities.ProductRelations, userID string, rchan chan ChanResult) {
-	defer close(rchan)
-	var crawlerResults = []chan CrawlerRestultChan{}
-
 	fmt.Println("Processando produtos")
 
-	chanIndex := 0
-	for _, productRelation := range productsRelations {
-		fmt.Println("Iniciando processamento do produto ", productRelation.Product.Description)
+	var jobs = make(chan entities.ProductRelations, 5)
+	var results = make(chan CrawlerRestultChan, 5)
+	var doneChan = make(chan bool)
+	noWorkers := 5
 
-		err := c.setupCrawlerEnv(productRelation.CrawlerPath)
+	go c.allocateJobs(productsRelations, jobs)
+	go c.getResultsFromJobs(userID, results, doneChan, rchan)
+	c.createWorkerPool(noWorkers, jobs, results)
+	<-doneChan
+}
+
+func (c *Crawler) allocateJobs(productsRelations []entities.ProductRelations, jobChan chan entities.ProductRelations) {
+	defer close(jobChan)
+	for i := 0; i < len(productsRelations); i++ {
+		jobChan <- productsRelations[i]
+	}
+}
+
+func (c *Crawler) getResultsFromJobs(userID string, resultsChan chan CrawlerRestultChan, doneChan chan bool, userResultChan chan ChanResult) {
+	defer close(userResultChan)
+	for result := range resultsChan {
+		fmt.Println("Pegando resultado para o produto ", result.ProductDescription)
+		crawlerResult := c.parser.parseCrawlerResult(result.CrawlerResult)
+
+		productSearchResult, err := c.createProductSearchHistory(crawlerResult, userID, result.ProductID)
+
 		if err != nil {
-			rchan <- ChanResult{Result: entities.ProductSearchResult{}, Err: err}
+			userResultChan <- ChanResult{Result: entities.ProductSearchResult{}, Err: err}
 		}
 
-		crawlerResults = append(crawlerResults, make(chan CrawlerRestultChan))
-		go c.runCrawler(
-			ProductData{
-				crawlerPath: productRelation.CrawlerPath,
-				productLink: productRelation.Product.Link,
-				productID:   productRelation.Product.ID,
-			},
-			crawlerResults[chanIndex],
-		)
+		fmt.Println("Retornando resultado do produto", result.ProductDescription, " para chanel de usuário")
+		userResultChan <- ChanResult{Result: productSearchResult, Err: nil}
+		fmt.Println("Resultado do produto ", result.ProductDescription, " retornado")
 
-		chanIndex++
 	}
+	fmt.Println("Finalizando processamento dos resultados")
+	doneChan <- true
+}
 
-	for _, channel := range crawlerResults {
-		for ch := range channel {
+func (c *Crawler) createWorkerPool(noWorkers int, jobChan chan entities.ProductRelations, resultsChan chan CrawlerRestultChan) {
+	var wg sync.WaitGroup
+	for i := 0; i < noWorkers; i++ {
+		wg.Add(1)
+		fmt.Println("Inicia worker  ", i)
+		go c.processProduct(jobChan, resultsChan, &wg)
+	}
+	wg.Wait()
+	close(resultsChan)
+}
 
-			crawlerResult := c.parser.parseCrawlerResult(ch.CrawlerResult)
+func (c *Crawler) processProduct(jobChan chan entities.ProductRelations, resultsChan chan CrawlerRestultChan, wg *sync.WaitGroup) {
+	for job := range jobChan {
+		fmt.Println("Iniciando processamento do produto ", job.Product.Description)
 
-			productSearchResult, err := c.createProductSearchHistory(crawlerResult, userID, ch.ProductID)
-			if err != nil {
-				rchan <- ChanResult{Result: entities.ProductSearchResult{}, Err: err}
+		err := c.setupCrawlerEnv(job.CrawlerPath)
+		if err != nil {
+			resultsChan <- CrawlerRestultChan{
+				CrawlerResult:      "",
+				CrawlerErr:         "Error setting up crawler environment",
+				ProductID:          job.Product.ID,
+				ProductDescription: job.Product.Description,
 			}
-
-			rchan <- ChanResult{Result: productSearchResult, Err: nil}
 		}
+
+		fmt.Println("Executando crawler")
+		cmd := exec.Command("pipenv", "run", "python", job.CrawlerPath, fmt.Sprintf("-u %s", job.Product.Link))
+
+		var outb, errb bytes.Buffer
+		cmd.Stdout = &outb
+		cmd.Stderr = &errb
+
+		err = cmd.Run()
+		if err != nil {
+			resultsChan <- CrawlerRestultChan{}
+		}
+
+		fmt.Println("String de retorno do comando de execução: ", outb.String())
+		fmt.Println("String de erro do comando de execução: ", errb.String())
+
+		crawlerResult := CrawlerRestultChan{
+			CrawlerResult:      outb.String(),
+			CrawlerErr:         errb.String(),
+			ProductID:          job.Product.ID,
+			ProductDescription: job.Product.Description,
+		}
+
+		resultsChan <- crawlerResult
 	}
+	wg.Done()
 }
 
 func (c *Crawler) setupCrawlerEnv(crawlerPath string) error {
