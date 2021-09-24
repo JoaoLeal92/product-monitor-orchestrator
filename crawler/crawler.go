@@ -56,42 +56,31 @@ func (c *Crawler) StartCrawler(userProductsRelation map[string][]entities.Produc
 
 func (c *Crawler) processUsers(userProductsRelation map[string][]entities.ProductRelations) ([]entities.ProductSearchResult, error) {
 	var processingResults []entities.ProductSearchResult
-	var results = []chan ChanResult{}
 
-	chanIndex := 0
 	for userID, products := range userProductsRelation {
-		results = append(results, make(chan ChanResult))
-		fmt.Println("Processing user id: ", userID)
+		fmt.Println("Processando usuário com id: ", userID)
 
-		go c.processProducts(products, userID, results[chanIndex])
-
-		chanIndex++
-	}
-
-	for _, result := range results {
-		for v := range result {
-			if v.Err != nil {
-				return []entities.ProductSearchResult{}, v.Err
-			}
-			processingResults = append(processingResults, v.Result)
-		}
+		processResult := c.processProducts(products, userID)
+		processingResults = append(processingResults, processResult...)
 	}
 
 	return processingResults, nil
 }
 
-func (c *Crawler) processProducts(productsRelations []entities.ProductRelations, userID string, rchan chan ChanResult) {
+func (c *Crawler) processProducts(productsRelations []entities.ProductRelations, userID string) []entities.ProductSearchResult {
 	fmt.Println("Processando produtos")
 
 	var jobs = make(chan entities.ProductRelations, 5)
 	var results = make(chan CrawlerRestultChan, 5)
-	var doneChan = make(chan bool)
+	var doneChan = make(chan []entities.ProductSearchResult)
 	noWorkers := 5
 
 	go c.allocateJobs(productsRelations, jobs)
-	go c.getResultsFromJobs(userID, results, doneChan, rchan)
+	go c.getResultsFromJobs(userID, results, doneChan)
 	c.createWorkerPool(noWorkers, jobs, results)
-	<-doneChan
+	processingResults := <-doneChan
+
+	return processingResults
 }
 
 func (c *Crawler) allocateJobs(productsRelations []entities.ProductRelations, jobChan chan entities.ProductRelations) {
@@ -101,8 +90,10 @@ func (c *Crawler) allocateJobs(productsRelations []entities.ProductRelations, jo
 	}
 }
 
-func (c *Crawler) getResultsFromJobs(userID string, resultsChan chan CrawlerRestultChan, doneChan chan bool, userResultChan chan ChanResult) {
-	defer close(userResultChan)
+func (c *Crawler) getResultsFromJobs(userID string, resultsChan chan CrawlerRestultChan, doneChan chan []entities.ProductSearchResult) {
+	defer close(doneChan)
+
+	var processingResults []entities.ProductSearchResult
 	for result := range resultsChan {
 		fmt.Println("Pegando resultado para o produto ", result.ProductDescription)
 		crawlerResult := c.parser.parseCrawlerResult(result.CrawlerResult)
@@ -110,16 +101,15 @@ func (c *Crawler) getResultsFromJobs(userID string, resultsChan chan CrawlerRest
 		productSearchResult, err := c.createProductSearchHistory(crawlerResult, userID, result.ProductID)
 
 		if err != nil {
-			userResultChan <- ChanResult{Result: entities.ProductSearchResult{}, Err: err}
+			fmt.Println(err.Error())
 		}
 
 		fmt.Println("Retornando resultado do produto", result.ProductDescription, " para chanel de usuário")
-		userResultChan <- ChanResult{Result: productSearchResult, Err: nil}
-		fmt.Println("Resultado do produto ", result.ProductDescription, " retornado")
+		processingResults = append(processingResults, productSearchResult)
 
 	}
 	fmt.Println("Finalizando processamento dos resultados")
-	doneChan <- true
+	doneChan <- processingResults
 }
 
 func (c *Crawler) createWorkerPool(noWorkers int, jobChan chan entities.ProductRelations, resultsChan chan CrawlerRestultChan) {
