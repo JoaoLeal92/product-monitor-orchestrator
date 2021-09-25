@@ -7,8 +7,9 @@ import (
 )
 
 type RepoManager interface {
-	Users()
-	Products()
+	Users() UsersRepository
+	Products() ProductsRepository
+	ProductSearchHistory() ProductSearchHistoryRepository
 }
 
 type UsersRepository interface {
