@@ -19,13 +19,6 @@ type Product struct {
 	UpdatedAt   time.Time
 }
 
-type CrawlerResult struct {
-	Price         string `mapstructure:"price"`
-	OriginalPrice string `mapstructure:"originalPrice"`
-	Discount      string `mapstructure:"discount"`
-	Link          string `mapstructure:"link"`
-}
-
 type ProductSearchResult struct {
 	ID            uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	UserID        uuid.UUID
