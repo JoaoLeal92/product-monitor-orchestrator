@@ -17,5 +17,6 @@ type DBConfig struct {
 }
 
 type CrawlerConfig struct {
-	Amazon string `mapstructure:"amazon"`
+	Amazon      string `mapstructure:"amazon"`
+	NumCrawlers int    `mapstructure:"num-crawlers"`
 }
