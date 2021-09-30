@@ -4,6 +4,7 @@ package config
 type Config struct {
 	Db       DBConfig      `mapstructure:"db"`
 	Crawlers CrawlerConfig `mapstructure:"crawlers"`
+	Log      LogConfig     `mapstructure:"log"`
 }
 
 // DBConfig database configs
@@ -19,4 +20,11 @@ type DBConfig struct {
 type CrawlerConfig struct {
 	Amazon      string `mapstructure:"amazon"`
 	NumCrawlers int    `mapstructure:"num-crawlers"`
+}
+
+type LogConfig struct {
+	Host       string `mapstructure:"host"`
+	Port       string `mapstructure:"port"`
+	Db         string `mapstructure:"db"`
+	Collection string `mapstructure:"collection"`
 }
