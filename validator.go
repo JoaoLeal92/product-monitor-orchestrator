@@ -4,17 +4,20 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/JoaoLeal92/product-monitor-orchestrator/contracts"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/data"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/entities"
 )
 
 type Validator struct {
-	db *data.Connection
+	db           *data.Connection
+	queueManager contracts.QueueManager
 }
 
-func NewValidator(db *data.Connection) *Validator {
+func NewValidator(db *data.Connection, queueManager contracts.QueueManager) *Validator {
 	return &Validator{
-		db: db,
+		db:           db,
+		queueManager: queueManager,
 	}
 }
 
@@ -42,6 +45,18 @@ func (v *Validator) ValidateCrawlerResults(crawlerResults []entities.ProductSear
 			fmt.Println("Average search price: ", avgProductPrice)
 			fmt.Println("Announced discount: ", result.Discount)
 			fmt.Println("Discount over average search price: ", avgProductDiscount)
+
+			finalProductResult := entities.ProductFinalResult{
+				Description: product.Description,
+				Price:       float64(result.Price / 100),
+				AvgPrice:    avgProductPrice,
+				Discount:    result.Discount,
+				AvgDiscount: avgProductDiscount,
+				Link:        product.Link,
+			}
+
+			fmt.Println(fmt.Sprintf("\n\n\nEnviando id para fila: %s\n\n\n", product.ID))
+			v.queueManager.SendMessage(finalProductResult)
 		} else {
 			fmt.Println("\nProduto acima do preço desejado: ")
 			fmt.Printf("%+v", result)

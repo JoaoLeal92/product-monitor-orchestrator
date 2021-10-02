@@ -9,6 +9,7 @@ import (
 	"github.com/JoaoLeal92/product-monitor-orchestrator/crawler"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/data"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/infra/logs"
+	"github.com/JoaoLeal92/product-monitor-orchestrator/infra/queue"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/services"
 )
 
@@ -23,8 +24,16 @@ func main() {
 	logger := logs.NewLogger(&cfg.Log)
 	db, _ := data.Instance(cfg.Db)
 	agg := NewAggregator(db, &cfg.Crawlers)
-	validator := NewValidator(db)
 	parser := crawler.NewResultParser()
+
+	queueManager, err := queue.NewQueueManager(&cfg.Queue)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Erro ao conectar-se com o gerenciador de filas: %v", err))
+	}
+	defer queueManager.CloseConnection()
+	defer queueManager.CloseChannel()
+
+	validator := NewValidator(db, queueManager)
 
 	productSearchHistoryService := services.NewProductSearchHistoryService(db)
 

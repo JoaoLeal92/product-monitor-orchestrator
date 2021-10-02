@@ -30,6 +30,15 @@ type ProductSearchResult struct {
 	UpdatedAt     time.Time
 }
 
+type ProductFinalResult struct {
+	Description string
+	Price       float64
+	AvgPrice    float64
+	Discount    string
+	AvgDiscount string
+	Link        string
+}
+
 type Tabler interface {
 	TableName() string
 }

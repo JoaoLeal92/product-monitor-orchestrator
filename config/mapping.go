@@ -5,6 +5,7 @@ type Config struct {
 	Db       DBConfig      `mapstructure:"db"`
 	Crawlers CrawlerConfig `mapstructure:"crawlers"`
 	Log      LogConfig     `mapstructure:"log"`
+	Queue    QueueConfig   `mapstructure:"queue"`
 }
 
 // DBConfig database configs
@@ -27,4 +28,8 @@ type LogConfig struct {
 	Port       string `mapstructure:"port"`
 	Db         string `mapstructure:"db"`
 	Collection string `mapstructure:"collection"`
+}
+
+type QueueConfig struct {
+	QueueName string `mapstructure:"queue-name"`
 }
