@@ -60,11 +60,7 @@ func (c *Crawler) processProducts(productsRelations []entities.ProductRelations,
 	c.logger.Info("Processando produtos")
 
 	numWorkers := c.cfg.NumCrawlers
-	processingChannels := entities.ProcessingChannels{
-		CrawlerJobsChan:      make(chan entities.ProductRelations, numWorkers),
-		CrawlerResultsChan:   make(chan entities.CrawlerChanRestult, numWorkers),
-		ProcessingResultChan: make(chan []entities.ProductSearchResult),
-	}
+	processingChannels := c.setupProcessChannels(numWorkers)
 
 	go c.allocateCrawlerJobs(productsRelations, processingChannels.CrawlerJobsChan)
 	go c.processResultsFromJobs(userID, processingChannels)
@@ -72,6 +68,16 @@ func (c *Crawler) processProducts(productsRelations []entities.ProductRelations,
 	processingResults := <-processingChannels.ProcessingResultChan
 
 	return processingResults
+}
+
+func (c *Crawler) setupProcessChannels(numWorkers int) entities.ProcessingChannels {
+	processingChannels := entities.ProcessingChannels{
+		CrawlerJobsChan:      make(chan entities.ProductRelations, numWorkers),
+		CrawlerResultsChan:   make(chan entities.CrawlerChanRestult, numWorkers),
+		ProcessingResultChan: make(chan []entities.ProductSearchResult),
+	}
+
+	return processingChannels
 }
 
 func (c *Crawler) allocateCrawlerJobs(productsRelations []entities.ProductRelations, crawlerJobsChan chan entities.ProductRelations) {
