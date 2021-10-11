@@ -14,6 +14,7 @@ type User struct {
 	Password    string    `json:"password"`
 	PhoneNumber int64     `json:"phone_number"`
 	Products    []Product
+	Active      int       `json:"active"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

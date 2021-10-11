@@ -13,7 +13,7 @@ type RepoManager interface {
 }
 
 type UsersRepository interface {
-	GetUsers() ([]entities.User, error)
+	GetActiveUsers() ([]entities.User, error)
 }
 
 type ProductsRepository interface {

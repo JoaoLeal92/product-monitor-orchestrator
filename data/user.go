@@ -17,10 +17,10 @@ func NewUsersRepository(conn *gorm.DB) *UserRepo {
 	}
 }
 
-func (r *UserRepo) GetUsers() ([]entities.User, error) {
+func (r *UserRepo) GetActiveUsers() ([]entities.User, error) {
 	var users []entities.User
 
-	result := r.db.Find(&users)
+	result := r.db.Where("active = ?", 1).Find(&users)
 	if result.Error != nil {
 		return []entities.User{}, result.Error
 	}

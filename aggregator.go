@@ -27,7 +27,7 @@ func NewAggregator(db *data.Connection, cfg *config.CrawlerConfig) *Aggregator {
 func (a *Aggregator) SetupUserProductRelations() (map[string][]entities.ProductRelations, error) {
 	usersProductsRelation := make(map[string][]entities.ProductRelations)
 
-	users, err := a.db.Users().GetUsers()
+	users, err := a.db.Users().GetActiveUsers()
 	if err != nil {
 		return usersProductsRelation, err
 	}
