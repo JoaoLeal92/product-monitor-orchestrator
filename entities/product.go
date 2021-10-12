@@ -37,6 +37,7 @@ type ProductFinalResult struct {
 	Discount    string
 	AvgDiscount string
 	Link        string
+	UserID      string
 }
 
 type Tabler interface {

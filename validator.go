@@ -53,6 +53,7 @@ func (v *Validator) ValidateCrawlerResults(crawlerResults []entities.ProductSear
 				Discount:    result.Discount,
 				AvgDiscount: avgProductDiscount,
 				Link:        product.Link,
+				UserID:      product.UserID.String(),
 			}
 
 			fmt.Println(fmt.Sprintf("\n\n\nEnviando id para fila: %s\n\n\n", product.ID))
