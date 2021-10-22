@@ -19,8 +19,9 @@ type DBConfig struct {
 }
 
 type CrawlerConfig struct {
-	Amazon      string `mapstructure:"amazon"`
-	NumCrawlers int    `mapstructure:"num-crawlers"`
+	Amazon       string `mapstructure:"amazon"`
+	MercadoLivre string `mapstructure:"mercado-livre"`
+	NumCrawlers  int    `mapstructure:"num-crawlers"`
 }
 
 type LogConfig struct {
