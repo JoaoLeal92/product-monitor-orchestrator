@@ -62,7 +62,9 @@ func (a *Aggregator) SetupUserProductRelations() (map[string][]entities.ProductR
 }
 
 func (a *Aggregator) getCrawlerPath(crawlerName string) (string, error) {
-	crawlerPath, err := reflections.GetField(a.cfg, strings.Title(crawlerName))
+	crawlerKey := strings.Title(crawlerName)
+	crawlerKey = strings.Replace(crawlerKey, "-", "", 1)
+	crawlerPath, err := reflections.GetField(a.cfg, crawlerKey)
 
 	crawlerPathStr, ok := crawlerPath.(string)
 	if !ok {
