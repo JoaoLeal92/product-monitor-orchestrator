@@ -45,8 +45,10 @@ func (s *ProductSearchHistoryService) CreateProductSearchHistory(crawlerResult *
 		Discount:      crawlerResult.Discount,
 	}
 
-	s.db.ProductSearchHistory().InsertNewHistory(&productSearchResult)
-	fmt.Println("Histórico inserido com sucesso")
+	if productSearchResult.Price != 0 {
+		s.db.ProductSearchHistory().InsertNewHistory(&productSearchResult)
+		fmt.Println("Histórico inserido com sucesso")
+	}
 
 	return productSearchResult, nil
 }
