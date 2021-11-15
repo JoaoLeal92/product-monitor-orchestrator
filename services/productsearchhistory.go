@@ -46,7 +46,10 @@ func (s *ProductSearchHistoryService) CreateProductSearchHistory(crawlerResult *
 	}
 
 	if productSearchResult.Price != 0 {
-		s.db.ProductSearchHistory().InsertNewHistory(&productSearchResult)
+		err = s.db.ProductSearchHistory().InsertNewHistory(&productSearchResult)
+		if err != nil {
+			fmt.Println("ERRO na inserção do produto na base: ", err.Error())
+		}
 		fmt.Println("Histórico inserido com sucesso")
 	}
 
