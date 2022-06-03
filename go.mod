@@ -16,6 +16,7 @@ require (
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/viper v1.8.1 // indirect
 	github.com/streadway/amqp v1.0.0 // indirect
+	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/weekface/mgorus v0.0.0-20181029072001-239539fe10e4 // indirect
 	golang.org/x/sys v0.0.0-20210927094055-39ccf1dd6fa6 // indirect
 	golang.org/x/text v0.3.7 // indirect
