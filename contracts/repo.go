@@ -7,22 +7,12 @@ import (
 )
 
 type RepoManager interface {
-	Users() UsersRepository
 	Products() ProductsRepository
 	ProductSearchHistory() ProductSearchHistoryRepository
 }
 
-type UsersRepository interface {
-	GetActiveUsers() ([]entities.User, error)
-}
-
 type ProductsRepository interface {
-	GetActiveProductsByUser(userID uuid.UUID) ([]entities.Product, error)
-	GetProductByID(productId uuid.UUID) (entities.Product, error)
-}
-
-type CrawlersRepository interface {
-	GetCrawlerName(crawlerID uuid.UUID) (string, error)
+	GetProductsListForCrawler() ([]entities.Product, error)
 }
 
 type ProductSearchHistoryRepository interface {
