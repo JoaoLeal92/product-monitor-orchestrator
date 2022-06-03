@@ -1,3 +1,5 @@
 config.toml
 .vscode/
 todo.md
+mockery
+coverage.out
