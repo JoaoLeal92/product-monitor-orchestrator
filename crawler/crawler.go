@@ -15,104 +15,110 @@ import (
 )
 
 type Crawler struct {
-	parser *ResultParser
-	cfg    *config.CrawlerConfig
-	svc    contracts.ProductSearchHistoryService
-	logger contracts.LoggerContract
+	parser          *ResultParser
+	cfg             *config.CrawlerConfig
+	notificationSvc contracts.ProductNotificationService
+	logger          contracts.LoggerContract
 }
 
-func NewCrawler(parser *ResultParser, cfg *config.CrawlerConfig, svc contracts.ProductSearchHistoryService, logger contracts.LoggerContract) *Crawler {
+type processingChannels struct {
+	CrawlerJobsChan      chan entities.Product
+	CrawlerResultsChan   chan crawlerChanResult
+	EndProcessingChannel chan bool
+}
+
+type crawlerChanResult struct {
+	CrawlerResult string
+	CrawlerErr    string
+	Product       entities.Product
+}
+
+type crawlerOutput struct {
+	OutputMessage string
+	OutputError   string
+}
+
+func NewCrawler(parser *ResultParser, cfg *config.CrawlerConfig, notificationSvc contracts.ProductNotificationService, logger contracts.LoggerContract) *Crawler {
 	return &Crawler{
-		parser: parser,
-		cfg:    cfg,
-		svc:    svc,
-		logger: logger,
+		parser:          parser,
+		cfg:             cfg,
+		notificationSvc: notificationSvc,
+		logger:          logger,
 	}
 }
 
-func (c *Crawler) StartCrawler(userProductsRelation map[string][]entities.ProductRelations) ([]entities.ProductSearchResult, error) {
+func (c *Crawler) StartCrawler(products []entities.Product) error {
 	c.logger.AddFields(map[string]interface{}{"process_id": uuid.New().String()})
-	c.logger.Info("Iniciando processamento dos usuários")
+	c.logger.Info("Iniciando processamento dos produtos")
 
-	crawlersResults, err := c.processUsers(userProductsRelation)
+	err := c.processProducts(products)
 	if err != nil {
-		return []entities.ProductSearchResult{}, err
+		return err
 	}
 
-	return crawlersResults, nil
+	return nil
 }
 
-func (c *Crawler) processUsers(userProductsRelation map[string][]entities.ProductRelations) ([]entities.ProductSearchResult, error) {
-	var crawlersResults []entities.ProductSearchResult
-
-	for userID, products := range userProductsRelation {
-		c.logger.AddFields(map[string]interface{}{"user_id": userID})
-		c.logger.Info(fmt.Sprintf("Processando usuário com id: %s", userID))
-
-		processResult := c.processProducts(products, userID)
-		crawlersResults = append(crawlersResults, processResult...)
-	}
-
-	return crawlersResults, nil
-}
-
-func (c *Crawler) processProducts(productsRelations []entities.ProductRelations, userID string) []entities.ProductSearchResult {
+func (c *Crawler) processProducts(productsRelations []entities.Product) error {
 	c.logger.Info("Processando produtos")
 
 	numWorkers := c.cfg.NumCrawlers
 	processingChannels := c.setupProcessChannels(numWorkers)
 
 	go c.allocateCrawlerJobs(productsRelations, processingChannels.CrawlerJobsChan)
-	go c.processResultsFromJobs(userID, processingChannels)
+	go c.processResultsFromJobs(processingChannels)
 	c.createWorkerPool(numWorkers, processingChannels)
-	processingResults := <-processingChannels.ProcessingResultChan
+	<-processingChannels.EndProcessingChannel
 
-	return processingResults
+	return nil
 }
 
-func (c *Crawler) setupProcessChannels(numWorkers int) entities.ProcessingChannels {
-	processingChannels := entities.ProcessingChannels{
-		CrawlerJobsChan:      make(chan entities.ProductRelations, numWorkers),
-		CrawlerResultsChan:   make(chan entities.CrawlerChanRestult, numWorkers),
-		ProcessingResultChan: make(chan []entities.ProductSearchResult),
+func (c *Crawler) setupProcessChannels(numWorkers int) processingChannels {
+	processingChannels := processingChannels{
+		CrawlerJobsChan:      make(chan entities.Product, numWorkers),
+		CrawlerResultsChan:   make(chan crawlerChanResult, numWorkers),
+		EndProcessingChannel: make(chan bool),
 	}
 
 	return processingChannels
 }
 
-func (c *Crawler) allocateCrawlerJobs(productsRelations []entities.ProductRelations, crawlerJobsChan chan entities.ProductRelations) {
+func (c *Crawler) allocateCrawlerJobs(products []entities.Product, crawlerJobsChan chan entities.Product) {
 	defer close(crawlerJobsChan)
-	for i := 0; i < len(productsRelations); i++ {
-		crawlerJobsChan <- productsRelations[i]
+	for i := 0; i < len(products); i++ {
+		crawlerJobsChan <- products[i]
 	}
 }
 
-func (c *Crawler) processResultsFromJobs(userID string, processingChannels entities.ProcessingChannels) {
-	defer close(processingChannels.ProcessingResultChan)
+func (c *Crawler) processResultsFromJobs(processingChannels processingChannels) {
+	defer close(processingChannels.EndProcessingChannel)
 
-	var processingResults []entities.ProductSearchResult
 	for channelResult := range processingChannels.CrawlerResultsChan {
-		c.logger.Info(fmt.Sprintf("%s Pegando resultado para o produto %s", channelResult.ProductID, channelResult.ProductDescription))
+		c.logger.Info(fmt.Sprintf("%s Pegando resultado para o produto %s", channelResult.Product.ID, channelResult.Product.Description))
 
 		crawlerResult := c.parser.parseCrawlerResult(channelResult.CrawlerResult)
 		if channelResult.CrawlerErr != "" {
-			c.logger.Error(fmt.Sprintf("Erro no processamento de %s: %s", channelResult.ProductID, channelResult.CrawlerErr))
+			c.logger.Error(fmt.Sprintf("Erro no processamento de %s: %s", channelResult.Product.ID, channelResult.CrawlerErr))
+		}
+		productSearchResult := entities.ProductSearchResult{
+			ProductID:     channelResult.Product.ID,
+			UserID:        channelResult.Product.UserID,
+			Price:         crawlerResult.Price,
+			OriginalPrice: crawlerResult.OriginalPrice,
+			Discount:      crawlerResult.Discount,
 		}
 
-		productSearchResult, err := c.svc.CreateProductSearchHistory(crawlerResult, userID, channelResult.ProductID)
+		err := c.notificationSvc.Execute(&channelResult.Product, &productSearchResult)
 		if err != nil {
-			c.logger.Error(fmt.Sprintf("%s: Erro na criação de histórico", channelResult.ProductID))
+			c.logger.Error(fmt.Sprintf("%s: Erro na criação de histórico", channelResult.Product.ID))
+			c.logger.Error(err.Error())
 		}
-
-		c.logger.Info(fmt.Sprintf("Retornando resultado do produto %s para chanel de usuário", channelResult.ProductDescription))
-		processingResults = append(processingResults, productSearchResult)
-
 	}
 	c.logger.Info("Finalizando processamento dos resultados")
-	processingChannels.ProcessingResultChan <- processingResults
+	processingChannels.EndProcessingChannel <- true
 }
 
-func (c *Crawler) createWorkerPool(numWorkers int, processingChannels entities.ProcessingChannels) {
+func (c *Crawler) createWorkerPool(numWorkers int, processingChannels processingChannels) {
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
@@ -122,35 +128,35 @@ func (c *Crawler) createWorkerPool(numWorkers int, processingChannels entities.P
 	close(processingChannels.CrawlerResultsChan)
 }
 
-func (c *Crawler) crawlProduct(processingChannels entities.ProcessingChannels, wg *sync.WaitGroup) {
+func (c *Crawler) crawlProduct(processingChannels processingChannels, wg *sync.WaitGroup) {
 	for job := range processingChannels.CrawlerJobsChan {
-		c.logger.Info(fmt.Sprintf("%s Iniciando processamento do produto %s", job.Product.ID, job.Product.Description))
+		c.logger.Info(fmt.Sprintf("%s Iniciando processamento do produto %s", job.ID, job.Description))
 
-		err := c.setupCrawlerEnv(job.CrawlerPath, job.Product.ID.String())
+		crawlerPath, err := job.GetCrawlerPath(c.cfg)
 		if err != nil {
-			processingChannels.CrawlerResultsChan <- entities.CrawlerChanRestult{
-				CrawlerResult:      "",
-				CrawlerErr:         "Error setting up crawler environment",
-				ProductID:          job.Product.ID,
-				ProductDescription: job.Product.Description,
-			}
+			c.logger.Error(fmt.Sprintf("erro na busca de produto de id %s para usuário %s", job.ID.String(), job.UserID.String()))
+			c.logger.Error(err.Error())
+			continue
 		}
 
-		crawlerOutput, err := c.runCrawler(job.CrawlerPath, job.Product)
+		err = c.setupCrawlerEnv(crawlerPath, job.ID.String())
 		if err != nil {
-			processingChannels.CrawlerResultsChan <- entities.CrawlerChanRestult{
-				CrawlerResult:      "",
-				CrawlerErr:         "Error running crawler for product",
-				ProductID:          job.Product.ID,
-				ProductDescription: job.Product.Description,
-			}
+			c.logger.Error(fmt.Sprintf("erro na busca de produto de id %s para usuário %s", job.ID.String(), job.UserID.String()))
+			c.logger.Error(err.Error())
+			continue
 		}
 
-		crawlerResult := entities.CrawlerChanRestult{
-			CrawlerResult:      crawlerOutput.OutputMessage,
-			CrawlerErr:         crawlerOutput.OutputError,
-			ProductID:          job.Product.ID,
-			ProductDescription: job.Product.Description,
+		crawlerOutput, err := c.runCrawler(crawlerPath, job)
+		if err != nil {
+			c.logger.Error(fmt.Sprintf("erro na busca de produto de id %s para usuário %s", job.ID.String(), job.UserID.String()))
+			c.logger.Error(err.Error())
+			continue
+		}
+
+		crawlerResult := crawlerChanResult{
+			CrawlerResult: crawlerOutput.OutputMessage,
+			CrawlerErr:    crawlerOutput.OutputError,
+			Product:       job,
 		}
 
 		processingChannels.CrawlerResultsChan <- crawlerResult
@@ -175,7 +181,7 @@ func (c *Crawler) setupCrawlerEnv(crawlerPath string, productID string) error {
 	return nil
 }
 
-func (c *Crawler) runCrawler(crawlerPath string, product entities.Product) (entities.CrawlerOutput, error) {
+func (c *Crawler) runCrawler(crawlerPath string, product entities.Product) (crawlerOutput, error) {
 	c.logger.Info(fmt.Sprintf("%s Executando crawler no link %s", product.ID.String(), product.Link))
 	cmd := exec.Command("pipenv", "run", "python", crawlerPath, fmt.Sprintf("-u %s", product.Link))
 
@@ -185,10 +191,10 @@ func (c *Crawler) runCrawler(crawlerPath string, product entities.Product) (enti
 
 	err := cmd.Run()
 	if err != nil {
-		return entities.CrawlerOutput{}, err
+		return crawlerOutput{}, err
 	}
 
-	crawlerOutput := entities.CrawlerOutput{
+	crawlerOutput := crawlerOutput{
 		OutputMessage: outb.String(),
 		OutputError:   errb.String(),
 	}
