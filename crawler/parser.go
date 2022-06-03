@@ -2,14 +2,21 @@ package crawler
 
 import (
 	"fmt"
+	"strconv"
 
-	"github.com/JoaoLeal92/product-monitor-orchestrator/entities"
 	"github.com/dlclark/regexp2"
 	"github.com/mitchellh/mapstructure"
 )
 
 type ResultParser struct {
 	reMap map[string]string
+}
+
+type crawlerResult struct {
+	Price         int    `mapstructure:"price"`
+	OriginalPrice int    `mapstructure:"originalPrice"`
+	Discount      string `mapstructure:"discount"`
+	Link          string `mapstructure:"link"`
 }
 
 func NewResultParser() *ResultParser {
@@ -25,7 +32,7 @@ func NewResultParser() *ResultParser {
 	}
 }
 
-func (r *ResultParser) parseCrawlerResult(crawlerOutput string) *entities.CrawlerResult {
+func (r *ResultParser) parseCrawlerResult(crawlerOutput string) *crawlerResult {
 	fmt.Println("Extraindo dados do retorno do crawler")
 	crawlerResult, err := r.parseCrawlerOutput(crawlerOutput)
 	if err != nil {
@@ -35,8 +42,8 @@ func (r *ResultParser) parseCrawlerResult(crawlerOutput string) *entities.Crawle
 	return crawlerResult
 }
 
-func (r *ResultParser) parseCrawlerOutput(out string) (*entities.CrawlerResult, error) {
-	crawlerResult := entities.CrawlerResult{}
+func (r *ResultParser) parseCrawlerOutput(out string) (*crawlerResult, error) {
+	crawlerResult := crawlerResult{}
 	parsedData := make(map[string]interface{})
 
 	for k, v := range r.reMap {
@@ -49,14 +56,36 @@ func (r *ResultParser) parseCrawlerOutput(out string) (*entities.CrawlerResult, 
 		if m.String() == "None" {
 			parsedData[k] = nil
 		} else {
-			parsedData[k] = m.String()
+			if k == "price" || k == "originalPrice" {
+				intPrice, err := r.priceStringToInt(m.String())
+				if err != nil {
+					fmt.Println(err)
+				}
+				parsedData[k] = intPrice
+			} else {
+				parsedData[k] = m.String()
+			}
 		}
 	}
 
 	err := mapstructure.Decode(parsedData, &crawlerResult)
 	if err != nil {
-		return &entities.CrawlerResult{}, err
+		return &crawlerResult, err
 	}
 
 	return &crawlerResult, nil
+}
+
+func (r *ResultParser) priceStringToInt(priceString string) (int, error) {
+	var priceInt int
+	var err error
+
+	if priceString != "" {
+		priceInt, err = strconv.Atoi(priceString)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return priceInt, nil
 }

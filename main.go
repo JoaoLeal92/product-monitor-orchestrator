@@ -23,30 +23,28 @@ func main() {
 
 	logger := logs.NewLogger(&cfg.Log)
 	db, _ := data.Instance(cfg.Db)
-	agg := NewAggregator(db, &cfg.Crawlers)
 	parser := crawler.NewResultParser()
 
 	queueManager, err := queue.NewQueueManager(&cfg.Queue)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Erro ao conectar-se com o gerenciador de filas: %v", err))
+		os.Exit(1)
 	}
 	defer queueManager.CloseConnection()
 	defer queueManager.CloseChannel()
 
-	validator := NewValidator(db, queueManager)
+	productNotificationService := services.NewProductNotificationService(db, logger, queueManager)
 
-	productSearchHistoryService := services.NewProductSearchHistoryService(db)
-
-	userProductsRelations, err := agg.SetupUserProductRelations()
+	products, err := db.Products().GetProductsListForCrawler()
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 		os.Exit(1)
 	}
 
-	crawler := crawler.NewCrawler(parser, &cfg.Crawlers, productSearchHistoryService, logger)
+	crawler := crawler.NewCrawler(parser, &cfg.Crawlers, productNotificationService, logger)
 
 	startTime := time.Now()
-	crawlerResults, err := crawler.StartCrawler(userProductsRelations)
+	err = crawler.StartCrawler(products)
 	elapsedTime := time.Since(startTime)
 	if err != nil {
 		panic(err)
@@ -55,12 +53,6 @@ func main() {
 	logger.ClearField("user_id")
 	logger.Info("Produtos processados com sucesso")
 	logger.Info(fmt.Sprintf("Tempo de execução do crawler: %v", elapsedTime))
-
-	err = validator.ValidateCrawlerResults(crawlerResults)
-	if err != nil {
-		fmt.Printf("Error: %v", err)
-		os.Exit(1)
-	}
 
 	logger.Info("Fim da operação do crawler")
 }
