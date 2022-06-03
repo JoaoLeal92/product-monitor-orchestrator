@@ -35,16 +35,8 @@ func Instance(cfg config.DBConfig) (*Connection, error) {
 	return &Connection{Db: db}, nil
 }
 
-func (c *Connection) Users() contracts.UsersRepository {
-	return NewUsersRepository(c.Db)
-}
-
 func (c *Connection) Products() contracts.ProductsRepository {
 	return NewProductsRepository(c.Db)
-}
-
-func (c *Connection) Crawlers() contracts.CrawlersRepository {
-	return NewCrawlerRepository(c.Db)
 }
 
 func (c *Connection) ProductSearchHistory() contracts.ProductSearchHistoryRepository {
