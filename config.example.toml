@@ -1,0 +1,23 @@
+
+[db]
+user="db-user"
+name="db-name"
+password="db-password"
+port=0
+host="db-host"
+silent-log-mode=false
+
+[crawlers]
+amazon = "path-to-amazon-crawler"
+mercado-livre = "path-to-mercadoLivre-crawler"
+kabum = "path-to-kabum-crawler"
+num-crawlers=5 # number of concurrent crawlers
+
+[log] # using mongodb to store the logs running on a raspberry pi
+host="log-db-host"
+port="log-db-port"
+db="log-db-name"
+collection="log-db-collecion"
+
+[queue]
+queue-name="name-of-message-queue"
