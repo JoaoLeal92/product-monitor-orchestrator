@@ -1,4 +1,4 @@
-package crawler
+package crawlerparser
 
 import (
 	"fmt"
@@ -32,7 +32,7 @@ func NewResultParser() *ResultParser {
 	}
 }
 
-func (r *ResultParser) parseCrawlerResult(crawlerOutput string) *crawlerResult {
+func (r *ResultParser) ParseCrawlerResult(crawlerOutput string) *crawlerResult {
 	fmt.Println("Extraindo dados do retorno do crawler")
 	crawlerResult, err := r.parseCrawlerOutput(crawlerOutput)
 	if err != nil {
