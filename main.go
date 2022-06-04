@@ -8,6 +8,7 @@ import (
 	"github.com/JoaoLeal92/product-monitor-orchestrator/config"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/crawler"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/data"
+	crawlerparser "github.com/JoaoLeal92/product-monitor-orchestrator/infra/crawerParser"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/infra/logs"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/infra/queue"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/services"
@@ -23,7 +24,7 @@ func main() {
 
 	logger := logs.NewLogger(&cfg.Log)
 	db, _ := data.Instance(cfg.Db)
-	parser := crawler.NewResultParser()
+	parser := crawlerparser.NewResultParser()
 
 	queueManager, err := queue.NewQueueManager(&cfg.Queue)
 	if err != nil {
@@ -33,18 +34,18 @@ func main() {
 	defer queueManager.CloseConnection()
 	defer queueManager.CloseChannel()
 
-	productNotificationService := services.NewProductNotificationService(db, logger, queueManager)
-
 	products, err := db.Products().GetProductsListForCrawler()
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 		os.Exit(1)
 	}
 
-	crawler := crawler.NewCrawler(parser, &cfg.Crawlers, productNotificationService, logger)
+	productNotificationService := services.NewProductNotificationService(db, logger, queueManager)
+	crawler := crawler.NewCrawler(&cfg.Crawlers, logger)
+	crawlerService := services.NewCrawlerService(parser, &cfg.Crawlers, productNotificationService, logger, crawler)
 
 	startTime := time.Now()
-	err = crawler.StartCrawler(products)
+	err = crawlerService.Execute(products)
 	elapsedTime := time.Since(startTime)
 	if err != nil {
 		panic(err)
