@@ -1,49 +1,51 @@
 package entities
 
 import (
-	"time"
+	"errors"
+	"path/filepath"
+	"strings"
 
+	"github.com/JoaoLeal92/product-monitor-orchestrator/config"
 	"github.com/google/uuid"
+	"github.com/oleiade/reflections"
 )
 
-// Product product entity
 type Product struct {
 	ID          uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	UserID      uuid.UUID `gorm:"index"`
 	Description string
 	MaxPrice    int
-	Active      bool `gorm:"default:true"`
 	Link        string
-	CrawlerID   uuid.UUID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	CrawlerName string
 }
 
-type ProductSearchResult struct {
-	ID            uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
-	UserID        uuid.UUID
-	ProductID     uuid.UUID
-	Price         int
-	OriginalPrice int
-	Discount      string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+func (p *Product) IsBelowMaxPrice(price int) bool {
+	return price != 0 && price <= p.MaxPrice
 }
 
-type ProductFinalResult struct {
-	Description string
-	Price       float64
-	AvgPrice    float64
-	Discount    string
-	AvgDiscount string
-	Link        string
-	UserID      string
+func (p *Product) GetCrawlerPath(cfg *config.CrawlerConfig) (string, error) {
+	crawlerKey := p.getFormatedCrawlerKey()
+	crawlerPath, err := reflections.GetField(cfg, crawlerKey)
+	if err != nil {
+		return "", err
+	}
+
+	crawlerPathStr, ok := crawlerPath.(string)
+	if !ok {
+		return "", errors.New("invalid crawler path")
+	}
+
+	crawlerAbsPath, err := filepath.Abs(crawlerPathStr)
+	if err != nil {
+		return "", err
+	}
+
+	return crawlerAbsPath, nil
 }
 
-type Tabler interface {
-	TableName() string
-}
+func (p *Product) getFormatedCrawlerKey() string {
+	crawlerKey := strings.Title(p.CrawlerName)
+	crawlerKey = strings.Replace(crawlerKey, "-", "", 1)
 
-func (ProductSearchResult) TableName() string {
-	return "product_search_history"
+	return crawlerKey
 }
