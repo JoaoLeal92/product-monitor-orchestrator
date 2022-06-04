@@ -7,7 +7,7 @@ import (
 	"github.com/JoaoLeal92/product-monitor-orchestrator/config"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/contracts"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/entities"
-	crawlerparser "github.com/JoaoLeal92/product-monitor-orchestrator/infra/crawerParser"
+	crawlerparser "github.com/JoaoLeal92/product-monitor-orchestrator/infra/crawlerParser"
 	"github.com/google/uuid"
 )
 

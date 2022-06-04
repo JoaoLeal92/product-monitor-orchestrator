@@ -8,7 +8,7 @@ import (
 	"github.com/JoaoLeal92/product-monitor-orchestrator/config"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/crawler"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/data"
-	crawlerparser "github.com/JoaoLeal92/product-monitor-orchestrator/infra/crawerParser"
+	crawlerparser "github.com/JoaoLeal92/product-monitor-orchestrator/infra/crawlerParser"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/infra/logs"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/infra/queue"
 	"github.com/JoaoLeal92/product-monitor-orchestrator/services"
