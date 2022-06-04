@@ -7,3 +7,7 @@ import (
 type ProductNotificationService interface {
 	Execute(product *entities.Product, productSearchResult *entities.ProductSearchResult) error
 }
+
+type CrawlerService interface {
+	Execute(products []entities.Product)
+}
